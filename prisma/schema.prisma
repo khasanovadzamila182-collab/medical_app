@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         Int         @id @default(autoincrement())
+  tgId       BigInt      @unique
+  phone      String?
+  subStatus  Boolean     @default(false)
+  subUntil   DateTime?
+  isAdmin    Boolean     @default(false)
+  lastActive DateTime    @default(now())
+  createdAt  DateTime    @default(now())
+  children   Child[]
+  logs       Log[]
+  events     DiagEvent[]
+}
+
+model Child {
+  id        Int      @id @default(autoincrement())
+  name      String
+  weight    Float
+  ageMonths Int
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Log {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  symptom   String
+  action    String
+  value     String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model RedFlag {
+  id       Int    @id @default(autoincrement())
+  module   String
+  trigger  String
+  message  String
+  severity String @default("danger")
+
+  @@index([module])
+}
+
+model DiagEvent {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  module    String
+  eventType String   // "start" | "end" | "red_flag"
+  step      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([module])
+  @@index([createdAt])
+}
+
+model MediaLink {
+  id       Int     @id @default(autoincrement())
+  stepId   String  @unique
+  imageUrl String
+  caption  String?
+}
