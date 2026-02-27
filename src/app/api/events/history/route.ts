@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/events/history — last 5 completed diagnostics for authenticated user
 export async function GET(req: Request) {
     // ── JWT Auth ──

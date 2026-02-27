@@ -22,21 +22,32 @@ export default function DashboardPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const L = langPref;
 
-  // Try auto-login via Telegram
+  // Try auto-login via Telegram initData
   useEffect(() => {
     if (typeof window !== "undefined" && (window as any).Telegram?.WebApp) {
       const tg = (window as any).Telegram.WebApp;
       tg.ready();
       tg.expand();
-      const tgId = tg.initDataUnsafe?.user?.id;
-      if (tgId && !userId) login(tgId);
+      const initData = tg.initData;
+      if (initData && !userId) login(initData);
+    } else if (!userId && typeof window !== "undefined") {
+      // Dev fallback: auto-login with a dev tgId when not in Telegram
+      const savedId = localStorage.getItem("mama_expert_state");
+      if (savedId) {
+        try {
+          const parsed = JSON.parse(savedId);
+          if (parsed.userId) login(String(parsed.userId));
+        } catch { }
+      }
     }
   }, [userId, login]);
 
-  // Fetch history
+  // Fetch history (with JWT auth)
   useEffect(() => {
     if (!userId) return;
-    fetch(`/api/events/history?userId=${userId}`)
+    const token = localStorage.getItem("mama_expert_token");
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch("/api/events/history", { headers })
       .then(r => r.ok ? r.json() : [])
       .then(setHistory)
       .catch(() => setHistory([]));
@@ -47,11 +58,11 @@ export default function DashboardPage() {
   const handleAuth = async () => {
     if (!phoneInput) return;
     setLoading(true);
-    let tgId = Date.now();
+    let initData = String(Date.now());
     if (typeof window !== "undefined" && (window as any).Telegram?.WebApp) {
-      tgId = (window as any).Telegram.WebApp.initDataUnsafe?.user?.id || tgId;
+      initData = (window as any).Telegram.WebApp.initData || initData;
     }
-    await login(tgId, phoneInput);
+    await login(initData, phoneInput);
     setLoading(false);
   };
 
