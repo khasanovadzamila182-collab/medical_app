@@ -11,11 +11,11 @@ export default function ProfilePage() {
     const { childrenInfo, selectedChildId, subStatus, saveProfile, langPref } = useApp() as any;
     const L = langPref;
     const [childrenData, setChildrenData] = useState<any[]>(childrenInfo || []);
-    
+
     useEffect(() => {
-       setChildrenData(childrenInfo || []);
+        setChildrenData(childrenInfo || []);
     }, [childrenInfo]);
-    
+
     return (
         <>
             <div className="sticky-header">
@@ -25,7 +25,7 @@ export default function ProfilePage() {
                     <span />
                 </div>
             </div>
-            
+
             <div className="page-body">
                 {childrenData.map((child, index) => (
                     <div key={index} className="card" style={{ marginBottom: "16px" }}>
@@ -33,8 +33,8 @@ export default function ProfilePage() {
                         <p className="subtitle">{child.weight} кг • {child.ageMonths} мес.</p>
                     </div>
                 ))}
-                
-                <button className="card card-clickable" style={{ width: "100%", padding: "16px", background: "var(--primary-light)", color: "var(--primary)", border: "dashed 2px var(--primary)", display: "flex", justifyContent: "center" }}>
+
+                <button onClick={() => router.push('/profile/new')} className="card card-clickable" style={{ width: "100%", padding: "16px", background: "var(--primary-light)", color: "var(--primary)", border: "dashed 2px var(--primary)", display: "flex", justifyContent: "center" }}>
                     + {t("Добавить ребёнка", L)}
                 </button>
             </div>
