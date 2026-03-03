@@ -21,6 +21,7 @@ interface AppState {
 
 interface AppContextValue extends AppState {
     setChildrenInfo: (c: any[]) => void;
+    selectChild: (id: number) => Promise<void>;
     setSelectedChildId: (id: number) => void;
     setChildWeight: (w: number) => void;
     setChildAgeMonths: (a: number) => void;
@@ -126,13 +127,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const res = await authFetch("/api/profile");
             if (res.ok) {
                 const data = await res.json();
-                setState(prev => ({
-                    ...prev,
-                    subStatus: data.subStatus,
-                    isAdmin: data.isAdmin,
-                    childrenInfo: data.childrenInfo || [],
-                    selectedChildId: data.selectedChildId !== undefined ? data.selectedChildId : null,
-                }));
+
+                let activeId = data.selectedChildId !== undefined ? data.selectedChildId : null;
+                const children = data.childrenInfo || [];
+
+                setState(prev => {
+                    const nextState = {
+                        ...prev,
+                        subStatus: data.subStatus,
+                        isAdmin: data.isAdmin,
+                        childrenInfo: children,
+                        selectedChildId: activeId,
+                    };
+
+                    // Auto-select first child if none selected but children exist
+                    if (!activeId && children.length > 0) {
+                        activeId = children[0].id;
+                        nextState.selectedChildId = activeId;
+                        nextState.childName = children[0].name;
+                        nextState.childWeight = children[0].weight;
+                        nextState.childAgeMonths = children[0].ageMonths;
+
+                        // Fire-and-forget update to backend
+                        authFetch("/api/profile", {
+                            method: "PUT",
+                            body: JSON.stringify({ selectedChildId: activeId })
+                        }).catch(() => { });
+                    } else if (activeId && children.length > 0) {
+                        const activeChild = children.find((c: any) => c.id === activeId);
+                        if (activeChild) {
+                            nextState.childName = activeChild.name;
+                            nextState.childWeight = activeChild.weight;
+                            nextState.childAgeMonths = activeChild.ageMonths;
+                        }
+                    }
+                    return nextState;
+                });
             }
         } catch (e) { console.error("fetchProfile failed", e); }
     }, []);
@@ -148,23 +178,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (res.ok) {
                 const data = await res.json();
 
-                // Store JWT
                 const jwt = data.token;
                 setToken(jwt);
                 tokenRef.current = jwt;
 
-                setState(prev => ({
-                    ...prev,
-                    userId: data.user.id,
-                    userPhone: data.user.phone || phone || "",
-                    subStatus: data.user.subStatus,
-                    isAdmin: data.user.isAdmin,
-                    childrenInfo: data.children || [],
-                    selectedChildId: data.selectedChildId !== undefined ? data.selectedChildId : null,
-                    childName: data.children?.length ? data.children[0].name : prev.childName,
-                    childWeight: data.children?.length ? data.children[0].weight : prev.childWeight,
-                    childAgeMonths: data.children?.length ? data.children[0].ageMonths : prev.childAgeMonths,
-                }));
+                let activeId = data.selectedChildId !== undefined ? data.selectedChildId : null;
+                const children = data.children || [];
+
+                setState(prev => {
+                    const nextState = {
+                        ...prev,
+                        userId: data.user.id,
+                        userPhone: data.user.phone || phone || "",
+                        subStatus: data.user.subStatus,
+                        isAdmin: data.user.isAdmin,
+                        childrenInfo: children,
+                        selectedChildId: activeId,
+                        childName: prev.childName,
+                        childWeight: prev.childWeight,
+                        childAgeMonths: prev.childAgeMonths,
+                    };
+
+                    if (!activeId && children.length > 0) {
+                        activeId = children[0].id;
+                        nextState.selectedChildId = activeId;
+                        nextState.childName = children[0].name;
+                        nextState.childWeight = children[0].weight;
+                        nextState.childAgeMonths = children[0].ageMonths;
+
+                        authFetch("/api/profile", {
+                            method: "PUT",
+                            body: JSON.stringify({ selectedChildId: activeId })
+                        }).catch(() => { });
+                    } else if (activeId && children.length > 0) {
+                        const activeChild = children.find((c: any) => c.id === activeId);
+                        if (activeChild) {
+                            nextState.childName = activeChild.name;
+                            nextState.childWeight = activeChild.weight;
+                            nextState.childAgeMonths = activeChild.ageMonths;
+                        }
+                    } else if (children.length > 0 && !activeId && !prev.childName) {
+                        nextState.childName = children[0].name;
+                        nextState.childWeight = children[0].weight;
+                        nextState.childAgeMonths = children[0].ageMonths;
+                    }
+                    return nextState;
+                });
+
                 return { ok: true };
             } else {
                 const err = await res.json().catch(() => ({}));
@@ -176,6 +236,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return { ok: false, error: e.message || "Network error" };
         }
     }, []);
+
+    const selectChild = useCallback(async (childId: number) => {
+        const child = state.childrenInfo.find(c => c.id === childId);
+        if (!child) return;
+
+        setState(prev => ({
+            ...prev,
+            selectedChildId: childId,
+            childName: child.name,
+            childWeight: child.weight,
+            childAgeMonths: child.ageMonths,
+        }));
+
+        if (state.userId) {
+            try {
+                await authFetch("/api/profile", {
+                    method: "PUT",
+                    body: JSON.stringify({ selectedChildId: childId }),
+                });
+            } catch (e) { console.error("Save selectedChildId error", e); }
+        }
+    }, [state.childrenInfo, state.userId]);
 
     const saveProfile = useCallback(async () => {
         if (!state.userId) return;
@@ -228,6 +310,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...state,
         setChildWeight: (w) => setState(p => ({ ...p, childWeight: w })),
         setChildrenInfo: (c: any[]) => setState(p => ({ ...p, childrenInfo: c })),
+        selectChild,
         setSelectedChildId: (id: number) => setState(p => ({ ...p, selectedChildId: id, childWeight: p.childrenInfo.find(c => c.id === id)?.weight || 0 })),
         setChildAgeMonths: (a) => setState(p => ({ ...p, childAgeMonths: a })),
         setChildName: (n) => setState(p => ({ ...p, childName: n })),

@@ -8,7 +8,7 @@ import { t } from "@/lib/i18n";
 
 export default function ProfilePage() {
     const router = useRouter();
-    const { childrenInfo, selectedChildId, subStatus, saveProfile, langPref } = useApp() as any;
+    const { childrenInfo, selectedChildId, selectChild, subStatus, saveProfile, langPref } = useApp() as any;
     const L = langPref;
     const [childrenData, setChildrenData] = useState<any[]>(childrenInfo || []);
 
@@ -27,12 +27,35 @@ export default function ProfilePage() {
             </div>
 
             <div className="page-body">
-                {childrenData.map((child, index) => (
-                    <div key={index} className="card" style={{ marginBottom: "16px" }}>
-                        <p className="title">{child.name}</p>
-                        <p className="subtitle">{child.weight} кг • {child.ageMonths} мес.</p>
-                    </div>
-                ))}
+                {childrenData.map((child, index) => {
+                    const isSelected = child.id === selectedChildId;
+                    return (
+                        <div
+                            key={index}
+                            className={`card ${isSelected ? 'selected-card' : ''}`}
+                            style={{
+                                marginBottom: "16px",
+                                cursor: "pointer",
+                                border: isSelected ? "2px solid var(--primary)" : "none",
+                                background: isSelected ? "var(--primary-light)" : "white",
+                                display: "flex", alignItems: "center", justifyContent: "space-between"
+                            }}
+                            onClick={() => {
+                                if (selectChild) selectChild(child.id);
+                            }}
+                        >
+                            <div>
+                                <p className="title">{child.name}</p>
+                                <p className="subtitle">{child.weight} кг • {child.ageMonths} мес.</p>
+                            </div>
+                            {isSelected && (
+                                <span className="material-symbols-outlined" style={{ color: "var(--primary)", fontSize: "28px" }}>
+                                    check_circle
+                                </span>
+                            )}
+                        </div>
+                    );
+                })}
 
                 <button onClick={() => router.push('/profile/new')} className="card card-clickable" style={{ width: "100%", padding: "16px", background: "var(--primary-light)", color: "var(--primary)", border: "dashed 2px var(--primary)", display: "flex", justifyContent: "center" }}>
                     + {t("Добавить ребёнка", L)}
