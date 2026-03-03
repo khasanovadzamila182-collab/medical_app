@@ -6,7 +6,7 @@ import { t } from "@/lib/i18n";
 
 export default function NewChildPage() {
     const router = useRouter();
-    const { langPref } = useApp() as any;
+    const { langPref, fetchProfile } = useApp() as any;
     const [name, setName] = useState("");
     const [weight, setWeight] = useState("");
     const [ageMonths, setAgeMonths] = useState("");
@@ -22,7 +22,8 @@ export default function NewChildPage() {
                 body: JSON.stringify({ name, weight: Number(weight), ageMonths: Number(ageMonths) }),
             });
             if (res.ok) {
-                router.back();
+                if (fetchProfile) await fetchProfile();
+                router.push("/");
             }
         } catch (e) {
             console.error(e);

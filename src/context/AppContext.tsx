@@ -29,7 +29,8 @@ interface AppContextValue extends AppState {
     setLastDiagPosition: (module: string, step: string) => void;
     clearLastDiag: () => void;
     setLangPref: (l: Lang) => void;
-    login: (initData?: string, phone?: string) => Promise<void>;
+    login: (initData?: string, phone?: string) => Promise<{ ok: boolean, error?: string }>;
+    fetchProfile: () => Promise<void>;
     saveProfile: () => Promise<void>;
     logEvent: (module: string, eventType: string, step?: string) => Promise<void>;
     needsWeight: () => boolean;
@@ -120,10 +121,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         saveToLS(rest);
     }, [state]);
 
-    /**
-     * Login: send Telegram initData to /api/auth for validation + JWT.
-     * In dev mode without Telegram, can send a raw tgId as initData.
-     */
+    const fetchProfile = useCallback(async () => {
+        try {
+            const res = await authFetch("/api/profile");
+            if (res.ok) {
+                const data = await res.json();
+                setState(prev => ({
+                    ...prev,
+                    subStatus: data.subStatus,
+                    isAdmin: data.isAdmin,
+                    childrenInfo: data.childrenInfo || [],
+                    selectedChildId: data.selectedChildId !== undefined ? data.selectedChildId : null,
+                }));
+            }
+        } catch (e) { console.error("fetchProfile failed", e); }
+    }, []);
+
     const login = useCallback(async (initData?: string, phone?: string) => {
         try {
             const res = await fetch("/api/auth", {
@@ -152,12 +165,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     childWeight: data.children?.length ? data.children[0].weight : prev.childWeight,
                     childAgeMonths: data.children?.length ? data.children[0].ageMonths : prev.childAgeMonths,
                 }));
+                return { ok: true };
             } else {
                 const err = await res.json().catch(() => ({}));
                 console.warn("Auth failed:", res.status, err);
+                return { ok: false, error: err.error || "Ошибка авторизации" };
             }
-        } catch (e) {
+        } catch (e: any) {
             console.warn("Auth API unreachable:", e);
+            return { ok: false, error: e.message || "Network error" };
         }
     }, []);
 
@@ -219,6 +235,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLastDiagPosition: (module, step) => setState(p => ({ ...p, lastDiagModule: module, lastDiagStep: step })),
         clearLastDiag: () => setState(p => ({ ...p, lastDiagModule: "", lastDiagStep: "" })),
         setLangPref: (l) => setState(p => ({ ...p, langPref: l })),
+        fetchProfile,
         login,
         saveProfile,
         logEvent,

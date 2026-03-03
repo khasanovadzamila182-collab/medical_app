@@ -54,7 +54,10 @@ export default function DashboardPage() {
     if (typeof window !== "undefined" && (window as any).Telegram?.WebApp) {
       initData = (window as any).Telegram.WebApp.initData || undefined;
     }
-    await login(initData, phoneInput);
+    const result = await login(initData, phoneInput);
+    if (result && !result.ok && result.error) {
+      alert(result.error);
+    }
     setLoading(false);
   };
 
