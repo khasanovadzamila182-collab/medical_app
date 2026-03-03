@@ -7,6 +7,8 @@ interface AppState {
     userPhone: string;
     subStatus: boolean;
     isAdmin: boolean;
+    childrenInfo: any[];
+    selectedChildId: number | null;
     childName: string;
     childWeight: number;
     childAgeMonths: number;
@@ -18,6 +20,8 @@ interface AppState {
 }
 
 interface AppContextValue extends AppState {
+    setChildrenInfo: (c: any[]) => void;
+    setSelectedChildId: (id: number) => void;
     setChildWeight: (w: number) => void;
     setChildAgeMonths: (a: number) => void;
     setChildName: (n: string) => void;
@@ -25,7 +29,7 @@ interface AppContextValue extends AppState {
     setLastDiagPosition: (module: string, step: string) => void;
     clearLastDiag: () => void;
     setLangPref: (l: Lang) => void;
-    login: (initData: string, phone?: string) => Promise<void>;
+    login: (initData?: string, phone?: string) => Promise<void>;
     saveProfile: () => Promise<void>;
     logEvent: (module: string, eventType: string, step?: string) => Promise<void>;
     needsWeight: () => boolean;
@@ -88,6 +92,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         userPhone: "",
         subStatus: false,
         isAdmin: false,
+        childrenInfo: [],
+        selectedChildId: null,
         childName: "",
         childWeight: 0,
         childAgeMonths: 0,
@@ -118,12 +124,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
      * Login: send Telegram initData to /api/auth for validation + JWT.
      * In dev mode without Telegram, can send a raw tgId as initData.
      */
-    const login = useCallback(async (initData: string, phone?: string) => {
+    const login = useCallback(async (initData?: string, phone?: string) => {
         try {
             const res = await fetch("/api/auth", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ initData, phone }),
+                body: JSON.stringify({ initData: initData || undefined, phone: phone || undefined }),
             });
 
             if (res.ok) {
@@ -140,35 +146,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     userPhone: data.user.phone || phone || "",
                     subStatus: data.user.subStatus,
                     isAdmin: data.user.isAdmin,
-                    childName: data.child?.name || prev.childName,
-                    childWeight: data.child?.weight || prev.childWeight,
-                    childAgeMonths: data.child?.ageMonths || prev.childAgeMonths,
+                    childrenInfo: data.children || [],
+                    selectedChildId: data.selectedChildId !== undefined ? data.selectedChildId : null,
+                    childName: data.children?.length ? data.children[0].name : prev.childName,
+                    childWeight: data.children?.length ? data.children[0].weight : prev.childWeight,
+                    childAgeMonths: data.children?.length ? data.children[0].ageMonths : prev.childAgeMonths,
                 }));
             } else {
                 const err = await res.json().catch(() => ({}));
                 console.warn("Auth failed:", res.status, err);
-
-                // Dev fallback: if in development and no token, use raw tgId
-                if (process.env.NODE_ENV === "development") {
-                    console.warn("DEV: using fallback auth");
-                    const tgId = Number(initData) || Date.now();
-                    setState(prev => ({
-                        ...prev,
-                        userId: tgId,
-                        userPhone: phone || "",
-                    }));
-                }
             }
         } catch (e) {
             console.warn("Auth API unreachable:", e);
-            if (process.env.NODE_ENV === "development") {
-                const tgId = Number(initData) || Date.now();
-                setState(prev => ({
-                    ...prev,
-                    userId: tgId,
-                    userPhone: phone || "",
-                }));
-            }
         }
     }, []);
 
@@ -222,6 +211,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const value: AppContextValue = {
         ...state,
         setChildWeight: (w) => setState(p => ({ ...p, childWeight: w })),
+        setChildrenInfo: (c: any[]) => setState(p => ({ ...p, childrenInfo: c })),
+        setSelectedChildId: (id: number) => setState(p => ({ ...p, selectedChildId: id, childWeight: p.childrenInfo.find(c => c.id === id)?.weight || 0 })),
         setChildAgeMonths: (a) => setState(p => ({ ...p, childAgeMonths: a })),
         setChildName: (n) => setState(p => ({ ...p, childName: n })),
         setCurrentDiagnostic: (d) => setState(p => ({ ...p, currentDiagnostic: d })),
@@ -231,7 +222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         login,
         saveProfile,
         logEvent,
-        needsWeight: () => !state.childWeight || state.childWeight <= 0,
+        needsWeight: () => !state.selectedChildId,
         isAuthenticated,
     };
 

@@ -1,4 +1,11 @@
+const fs = require('fs');
 
+const profPath = 'src/app/profile/page.tsx';
+let txt = fs.readFileSync(profPath, 'utf8');
+
+// Replace standard variables handling -> robust rendering of child array
+// Because writing whole file is better for UI rendering blocks.
+fs.writeFileSync(profPath, `
 "use client";
 import { useApp } from "@/context/AppContext";
 import Link from "next/link";
@@ -41,3 +48,4 @@ export default function ProfilePage() {
         </>
     );
 }
+`);

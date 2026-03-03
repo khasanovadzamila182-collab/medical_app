@@ -1,4 +1,10 @@
-import { NextResponse } from "next/server";
+const fs = require('fs');
+
+const path = 'src/app/api/profile/route.ts';
+let txt = fs.readFileSync(path, 'utf8');
+
+// The file exposes PUT method modifying profile. Replace to handle selectedChildId properly.
+fs.writeFileSync(path, `import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 
@@ -66,3 +72,4 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
 }
+`);

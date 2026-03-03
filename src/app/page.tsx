@@ -30,15 +30,6 @@ export default function DashboardPage() {
       tg.expand();
       const initData = tg.initData;
       if (initData && !userId) login(initData);
-    } else if (!userId && typeof window !== "undefined") {
-      // Dev fallback: auto-login with a dev tgId when not in Telegram
-      const savedId = localStorage.getItem("mama_expert_state");
-      if (savedId) {
-        try {
-          const parsed = JSON.parse(savedId);
-          if (parsed.userId) login(String(parsed.userId));
-        } catch { }
-      }
     }
   }, [userId, login]);
 
@@ -58,9 +49,10 @@ export default function DashboardPage() {
   const handleAuth = async () => {
     if (!phoneInput) return;
     setLoading(true);
-    let initData = String(Date.now());
+    // Check if inside Telegram Mini App
+    let initData: string | undefined;
     if (typeof window !== "undefined" && (window as any).Telegram?.WebApp) {
-      initData = (window as any).Telegram.WebApp.initData || initData;
+      initData = (window as any).Telegram.WebApp.initData || undefined;
     }
     await login(initData, phoneInput);
     setLoading(false);
@@ -79,7 +71,7 @@ export default function DashboardPage() {
       <div className="page-body" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "80vh" }}>
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <span className="material-symbols-outlined" style={{ fontSize: "64px", color: "var(--primary)" }}>health_and_safety</span>
-          <h1 style={{ marginTop: "16px", marginBottom: "8px" }}>Mama Expert</h1>
+          <h1 style={{ marginTop: "16px", marginBottom: "8px" }}>MomGuide</h1>
           <p className="section-sub">{t("Авторизуйтесь для доступа к диагностике", L)}</p>
         </div>
 
@@ -198,7 +190,6 @@ export default function DashboardPage() {
               <span className="material-symbols-outlined" style={{ color: "var(--primary)" }}>stethoscope</span>
             </div>
             <p style={{ fontWeight: 600, fontSize: "13px" }}>{t("Диагностика", L)}</p>
-            {!subStatus && <p style={{ fontSize: "11px", color: "#d97706", marginTop: "4px" }}>🔒 {L === "en" ? "SOS only" : L === "uz" ? "Faqat SOS" : "Только SOS"}</p>}
           </Link>
           <Link href="/dosage" className="card card-clickable" style={{ textAlign: "center", padding: "20px 12px", textDecoration: "none", color: "inherit" }}>
             <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px" }}>
@@ -253,7 +244,7 @@ export default function DashboardPage() {
             {t("Помощь", L)}
           </h2>
         </div>
-        <a href="https://t.me/mama_expert_support" target="_blank" rel="noopener noreferrer" className="card card-clickable" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "inherit" }}>
+        <a href="https://t.me/Khjane21" target="_blank" rel="noopener noreferrer" className="card card-clickable" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "inherit" }}>
           <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span className="material-symbols-outlined" style={{ color: "#3b82f6" }}>chat</span>
           </div>

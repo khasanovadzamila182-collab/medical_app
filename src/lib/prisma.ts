@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
+import dns from "dns";
+
+// Force Node.js to prefer IPv6 when resolving hostnames, since Supabase uses IPv6
+dns.setDefaultResultOrder("ipv6first");
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 

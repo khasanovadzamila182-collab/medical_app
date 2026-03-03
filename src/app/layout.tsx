@@ -5,7 +5,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Mama-Expert — Протокол ОРВИ",
+  title: "MomGuide — ПРОТОКОЛ ОРВИ",
   description: "Помощник для мам: диагностика симптомов, расчёт дозировок, напоминания о приёме лекарств",
 };
 

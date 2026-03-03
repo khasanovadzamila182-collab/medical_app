@@ -4,8 +4,6 @@ import { useApp } from "@/context/AppContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-type Tab = "users" | "kpi" | "media";
-
 interface UserData {
     id: number;
     phone: string | null;
@@ -22,27 +20,13 @@ interface KpiData {
     _count: { _all: number };
 }
 
-interface MediaData {
-    id: number;
-    stepId: string;
-    imageUrl: string;
-    caption: string | null;
-}
-
 export default function AdminPage() {
     const { isAdmin, loaded } = useApp();
     const router = useRouter();
-    const [tab, setTab] = useState<Tab>("users");
 
     const [users, setUsers] = useState<UserData[]>([]);
     const [kpi, setKpi] = useState<KpiData[]>([]);
-    const [media, setMedia] = useState<MediaData[]>([]);
     const [loading, setLoading] = useState(true);
-
-    // Media form
-    const [editStepId, setEditStepId] = useState("");
-    const [editImageUrl, setEditImageUrl] = useState("");
-    const [editCaption, setEditCaption] = useState("");
 
     useEffect(() => {
         if (!loaded) return;
@@ -51,14 +35,12 @@ export default function AdminPage() {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [uRes, kRes, mRes] = await Promise.all([
+                const [uRes, kRes] = await Promise.all([
                     fetch("/api/admin/users"),
                     fetch("/api/events"),
-                    fetch("/api/admin/media"),
                 ]);
                 if (uRes.ok) setUsers(await uRes.json());
                 if (kRes.ok) setKpi(await kRes.json());
-                if (mRes.ok) setMedia(await mRes.json());
             } catch (e) {
                 console.error("Admin fetch error:", e);
             } finally {
@@ -71,47 +53,17 @@ export default function AdminPage() {
     // KPI calculations
     const totalUsers = users.length;
     const paidUsers = users.filter(u => u.subStatus).length;
-    const conversionRate = totalUsers > 0 ? ((paidUsers / totalUsers) * 100).toFixed(1) : "0";
 
-    // Popularity: start events per module
+    // Popularity logic
     const popularityData = kpi
         .filter(k => k.eventType === "start")
-        .sort((a, b) => b._count._all - a._count._all);
+        .sort((a, b) => b._count._all - a._count._all)
+        .slice(0, 3); // Top 3 popular sections
 
-    // Drop-off: modules with starts but no ends (or fewer ends than starts)
-    const moduleStarts: Record<string, number> = {};
-    const moduleEnds: Record<string, number> = {};
-    kpi.forEach(k => {
-        if (k.eventType === "start") moduleStarts[k.module] = (moduleStarts[k.module] || 0) + k._count._all;
-        if (k.eventType === "end") moduleEnds[k.module] = (moduleEnds[k.module] || 0) + k._count._all;
-    });
-    const dropOffData = Object.keys(moduleStarts).map(mod => {
-        const starts = moduleStarts[mod] || 0;
-        const ends = moduleEnds[mod] || 0;
-        const dropped = starts - ends;
-        const rate = starts > 0 ? ((dropped / starts) * 100).toFixed(1) : "0";
-        return { module: mod, starts, ends, dropped, rate };
-    });
-
-    const handleSaveMedia = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            const res = await fetch("/api/admin/media", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ stepId: editStepId, imageUrl: editImageUrl, caption: editCaption }),
-            });
-            if (res.ok) {
-                const updated = await res.json();
-                setMedia(prev => {
-                    const idx = prev.findIndex(m => m.stepId === updated.stepId);
-                    if (idx >= 0) { const n = [...prev]; n[idx] = updated; return n; }
-                    return [...prev, updated];
-                });
-                setEditStepId(""); setEditImageUrl(""); setEditCaption("");
-            }
-        } catch (e) { console.error("Save media error:", e); }
-    };
+    // Recent registrations
+    const recentUsers = [...users]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5);
 
     if (!loaded || loading) return <div style={{ padding: 24, textAlign: "center" }}>Загрузка...</div>;
     if (!isAdmin) return null;
@@ -119,168 +71,113 @@ export default function AdminPage() {
     return (
         <div style={{ paddingBottom: "80px", minHeight: "100vh" }}>
             <div className="sticky-header" style={{ padding: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     <Link href="/" className="back-btn"><span className="material-symbols-outlined">arrow_back</span></Link>
                     <h1 style={{ fontSize: "20px", margin: 0 }}>Админ-панель</h1>
                 </div>
-                <div style={{ display: "flex", gap: "8px", overflowX: "auto" }}>
-                    {(["users", "kpi", "media"] as Tab[]).map(t => (
-                        <button key={t} onClick={() => setTab(t)} style={{
-                            padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--primary)",
-                            background: tab === t ? "var(--primary)" : "transparent",
-                            color: tab === t ? "white" : "var(--primary)", fontWeight: 600, fontSize: "13px", cursor: "pointer",
-                        }}>
-                            {t === "users" ? "Пользователи" : t === "kpi" ? "KPI" : "Медиа"}
-                        </button>
-                    ))}
-                </div>
             </div>
 
-            <div style={{ padding: "16px" }}>
-                {/* ═══ USERS TAB ═══ */}
-                {tab === "users" && (
-                    <div className="card" style={{ padding: "16px", overflowX: "auto" }}>
-                        <h2 style={{ fontSize: "16px", marginBottom: "16px" }}>Пользователи ({totalUsers})</h2>
-                        <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse", minWidth: "500px" }}>
-                            <thead>
-                                <tr style={{ borderBottom: "2px solid var(--border)", textAlign: "left" }}>
-                                    <th style={{ padding: "8px" }}>TG ID</th>
-                                    <th style={{ padding: "8px" }}>Телефон</th>
-                                    <th style={{ padding: "8px" }}>Подписка</th>
-                                    <th style={{ padding: "8px" }}>Дети</th>
-                                    <th style={{ padding: "8px" }}>Регистрация</th>
-                                    <th style={{ padding: "8px" }}>Активность</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {users.map(u => (
-                                    <tr key={u.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                        <td style={{ padding: "8px", fontFamily: "monospace" }}>{u.tgId}</td>
-                                        <td style={{ padding: "8px" }}>{u.phone || "—"}</td>
-                                        <td style={{ padding: "8px" }}>
-                                            {u.subStatus
-                                                ? <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ Активна</span>
-                                                : <span style={{ color: "#dc2626" }}>✕ Нет</span>}
-                                        </td>
-                                        <td style={{ padding: "8px" }}>{u.childrenCount}</td>
-                                        <td style={{ padding: "8px" }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString("ru-RU") : "—"}</td>
-                                        <td style={{ padding: "8px" }}>{new Date(u.lastActive).toLocaleDateString("ru-RU")}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "24px" }}>
+
+                {/* ═══ TOP: KPIs ═══ */}
+                <section>
+                    <h2 style={{ fontSize: "16px", marginBottom: "12px", color: "var(--primary)" }}>Ключевые показатели</h2>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                        <div className="card" style={{ textAlign: "center", padding: "16px" }}>
+                            <p style={{ fontSize: "28px", fontWeight: 800, color: "var(--primary)" }}>{totalUsers}</p>
+                            <p style={{ fontSize: "11px", color: "var(--text-secondary)", textTransform: "uppercase" }}>Всего юзеров</p>
+                        </div>
+                        <div className="card" style={{ textAlign: "center", padding: "16px" }}>
+                            <p style={{ fontSize: "28px", fontWeight: 800, color: "#22c55e" }}>{paidUsers}</p>
+                            <p style={{ fontSize: "11px", color: "var(--text-secondary)", textTransform: "uppercase" }}>Активных (PAID)</p>
+                        </div>
                     </div>
-                )}
 
-                {/* ═══ KPI TAB ═══ */}
-                {tab === "kpi" && (
-                    <>
-                        {/* Summary cards */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-                            <div className="card" style={{ textAlign: "center", padding: "16px" }}>
-                                <p style={{ fontSize: "28px", fontWeight: 800, color: "var(--primary)" }}>{totalUsers}</p>
-                                <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>Всего юзеров</p>
-                            </div>
-                            <div className="card" style={{ textAlign: "center", padding: "16px" }}>
-                                <p style={{ fontSize: "28px", fontWeight: 800, color: "#22c55e" }}>{paidUsers}</p>
-                                <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>Подписчики</p>
-                            </div>
-                            <div className="card" style={{ textAlign: "center", padding: "16px" }}>
-                                <p style={{ fontSize: "28px", fontWeight: 800, color: "#f59e0b" }}>{conversionRate}%</p>
-                                <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>Конверсия</p>
-                            </div>
-                        </div>
-
-                        {/* Popularity Index */}
-                        <div className="card" style={{ padding: "16px", marginBottom: "16px" }}>
-                            <h3 style={{ fontSize: "15px", marginBottom: "12px" }}>📊 Popularity Index</h3>
-                            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>Количество запусков по каждой категории</p>
-                            {popularityData.length === 0 && <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Данных пока нет.</p>}
-                            {popularityData.map((p, i) => {
-                                const maxCount = popularityData[0]?._count._all || 1;
-                                const barWidth = (p._count._all / maxCount) * 100;
-                                return (
-                                    <div key={i} style={{ marginBottom: "10px" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
-                                            <span style={{ fontWeight: 600 }}>{p.module}</span>
-                                            <span style={{ color: "var(--primary)", fontWeight: 700 }}>{p._count._all}</span>
-                                        </div>
-                                        <div style={{ height: "6px", background: "#f1f5f9", borderRadius: "3px", overflow: "hidden" }}>
-                                            <div style={{ height: "100%", width: `${barWidth}%`, background: "var(--primary)", borderRadius: "3px", transition: "width 0.3s" }} />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* Drop-off Rate */}
-                        <div className="card" style={{ padding: "16px" }}>
-                            <h3 style={{ fontSize: "15px", marginBottom: "12px" }}>📉 Drop-off Rate</h3>
-                            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>% пользователей, не завершивших диагностику</p>
-                            <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
-                                <thead>
-                                    <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
-                                        <th style={{ padding: "6px" }}>Модуль</th>
-                                        <th style={{ padding: "6px" }}>Начали</th>
-                                        <th style={{ padding: "6px" }}>Завершили</th>
-                                        <th style={{ padding: "6px" }}>Отказ</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {dropOffData.map((d, i) => (
-                                        <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                            <td style={{ padding: "6px", fontWeight: 600 }}>{d.module}</td>
-                                            <td style={{ padding: "6px" }}>{d.starts}</td>
-                                            <td style={{ padding: "6px" }}>{d.ends}</td>
-                                            <td style={{ padding: "6px", color: Number(d.rate) > 50 ? "#dc2626" : "#f59e0b", fontWeight: 700 }}>{d.rate}%</td>
-                                        </tr>
-                                    ))}
-                                    {dropOffData.length === 0 && <tr><td colSpan={4} style={{ padding: "16px", textAlign: "center" }}>Данных пока нет.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
-                )}
-
-                {/* ═══ MEDIA TAB ═══ */}
-                {tab === "media" && (
-                    <>
-                        <div className="card" style={{ padding: "16px", marginBottom: "16px" }}>
-                            <h2 style={{ fontSize: "16px", marginBottom: "8px" }}>Добавить/Изменить медиа</h2>
-                            <form onSubmit={handleSaveMedia} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                <div>
-                                    <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Step ID</label>
-                                    <input type="text" value={editStepId} onChange={e => setEditStepId(e.target.value)} required placeholder="lungs_wet_advice" style={{ width: "100%", padding: "12px", borderRadius: "12px", border: "1px solid var(--border)", fontSize: "15px" }} />
+                    <div className="card" style={{ padding: "16px" }}>
+                        <h3 style={{ fontSize: "14px", marginBottom: "12px" }}>Популярные разделы</h3>
+                        {popularityData.length === 0 ? <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Нет данных</p> :
+                            popularityData.map((p, i) => (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "13px", borderBottom: i !== popularityData.length - 1 ? "1px solid #f1f5f9" : "none", paddingBottom: "4px" }}>
+                                    <span>{p.module}</span>
+                                    <span style={{ fontWeight: 700, color: "var(--primary)" }}>{p._count._all} запусков</span>
                                 </div>
+                            ))
+                        }
+                    </div>
+                </section>
+
+                {/* ═══ MIDDLE: Recent Registrations ═══ */}
+                <section>
+                    <h2 style={{ fontSize: "16px", marginBottom: "12px", color: "var(--primary)" }}>Новые регистрации</h2>
+                    <div className="card" style={{ padding: "0" }}>
+                        {recentUsers.map((u, i) => (
+                            <div key={u.id} style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", borderBottom: i !== recentUsers.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                                 <div>
-                                    <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Image URL</label>
-                                    <input type="url" value={editImageUrl} onChange={e => setEditImageUrl(e.target.value)} required placeholder="https://..." style={{ width: "100%", padding: "12px", borderRadius: "12px", border: "1px solid var(--border)", fontSize: "15px" }} />
+                                    <p style={{ fontWeight: 600, fontSize: "14px" }}>TG: {u.tgId}</p>
+                                    <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{u.phone || "Нет номера"}</p>
                                 </div>
-                                <div>
-                                    <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Подпись</label>
-                                    <input type="text" value={editCaption} onChange={e => setEditCaption(e.target.value)} placeholder="Описание" style={{ width: "100%", padding: "12px", borderRadius: "12px", border: "1px solid var(--border)", fontSize: "15px" }} />
+                                <div style={{ textAlign: "right" }}>
+                                    <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{new Date(u.createdAt).toLocaleDateString("ru-RU")}</p>
+                                    {u.subStatus ? <span className="badge badge-success" style={{ padding: "2px 6px", fontSize: "10px" }}>Активен</span> : <span className="badge" style={{ padding: "2px 6px", fontSize: "10px" }}>Нет доступа</span>}
                                 </div>
-                                <button type="submit" className="btn-primary" style={{ marginTop: "8px" }}>Сохранить</button>
-                            </form>
-                        </div>
-                        <div className="card" style={{ padding: "16px" }}>
-                            <h2 style={{ fontSize: "16px", marginBottom: "16px" }}>Загруженные медиа</h2>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                {media.map(m => (
-                                    <div key={m.id} onClick={() => { setEditStepId(m.stepId); setEditImageUrl(m.imageUrl); setEditCaption(m.caption || ""); }} style={{ display: "flex", gap: "12px", alignItems: "center", padding: "12px", border: "1px solid var(--border)", borderRadius: "12px", cursor: "pointer" }}>
-                                        <img src={m.imageUrl} alt={m.caption || m.stepId} style={{ width: "60px", height: "60px", objectFit: "cover", borderRadius: "8px" }} />
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{ fontWeight: 600, fontSize: "14px" }}>{m.stepId}</p>
-                                            <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{m.caption || "Без подписи"}</p>
-                                        </div>
-                                        <span className="material-symbols-outlined" style={{ color: "var(--text-secondary)" }}>edit</span>
-                                    </div>
-                                ))}
-                                {media.length === 0 && <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Медиафайлов пока нет.</p>}
                             </div>
-                        </div>
-                    </>
-                )}
+                        ))}
+                    </div>
+                </section>
+
+                {/* ═══ BOTTOM: Settings & Management ═══ */}
+                <section>
+                    <h2 style={{ fontSize: "16px", marginBottom: "12px", color: "var(--primary)" }}>Управление контентом</h2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+
+                        <Link href="/admin/media" className="card card-clickable" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "inherit" }}>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <span className="material-symbols-outlined" style={{ color: "#d97706" }}>image</span>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ fontWeight: 600, fontSize: "14px" }}>Медиафайлы</p>
+                                <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Редактирование иллюстраций шагов</p>
+                            </div>
+                            <span className="material-symbols-outlined">chevron_right</span>
+                        </Link>
+
+                        <Link href="/admin/glossary" className="card card-clickable" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "inherit" }}>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "#ede9fe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <span className="material-symbols-outlined" style={{ color: "#8b5cf6" }}>menu_book</span>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ fontWeight: 600, fontSize: "14px" }}>Глоссарий</p>
+                                <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Добавление и удаление терминов</p>
+                            </div>
+                            <span className="material-symbols-outlined">chevron_right</span>
+                        </Link>
+
+                        <Link href="/admin/texts" className="card card-clickable" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "inherit" }}>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <span className="material-symbols-outlined" style={{ color: "#4f46e5" }}>translate</span>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ fontWeight: 600, fontSize: "14px" }}>Тексты и переводы</p>
+                                <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Редактор мультиязычных словарей</p>
+                            </div>
+                            <span className="material-symbols-outlined">chevron_right</span>
+                        </Link>
+
+                        <Link href="/admin/users" className="card card-clickable" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "inherit" }}>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <span className="material-symbols-outlined" style={{ color: "#22c55e" }}>group</span>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ fontWeight: 600, fontSize: "14px" }}>Все пользователи</p>
+                                <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Полный список базы данных</p>
+                            </div>
+                            <span className="material-symbols-outlined">chevron_right</span>
+                        </Link>
+
+                    </div>
+                </section>
+
             </div>
         </div>
     );

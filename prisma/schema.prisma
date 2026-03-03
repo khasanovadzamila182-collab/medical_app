@@ -18,6 +18,14 @@ model User {
   children   Child[]
   logs       Log[]
   events     DiagEvent[]
+
+  // New relation for the actively selected child in UI
+  selectedChildId Int?
+  selectedChild   Child? @relation("ActiveChild", fields: [selectedChildId], references: [id])
+
+  notes          Note[]
+  analysisFiles  AnalysisFile[]
+  reminders      Reminder[]
 }
 
 model Child {
@@ -28,6 +36,12 @@ model Child {
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  activeUsers User[] @relation("ActiveChild")
+
+  notes          Note[]
+  analysisFiles  AnalysisFile[]
+  reminders      Reminder[]
 
   @@index([userId])
 }
@@ -75,3 +89,52 @@ model MediaLink {
   imageUrl String
   caption  String?
 }
+
+model Note {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  childId   Int
+  text      String
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([childId])
+}
+
+model AnalysisFile {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  childId   Int
+  fileName  String
+  fileUrl   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([childId])
+}
+
+model Reminder {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  childId       Int
+  type          String   // "time" (e.g., 40 mins) | "medication"
+  title         String   // e.g., "Повторить замер" or "Нурофен 5мл"
+  intervalHours Int?     // e.g., 8, 12, etc. (for recurring)
+  nextAt        DateTime
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child         Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([childId])
+  @@index([nextAt])
+}
+
